@@ -70,7 +70,11 @@ const compressVideo = (inputPath, outputPath, maxSizeMb, maxDuration = 30) => {
         return reject(err);
       }
 
-      const duration = Math.min(metadata.format.duration, maxDuration);
+      const duration = metadata.format.duration;
+
+      // med maxDuration
+      // const duration = Math.min(metadata.format.duration, maxDuration);
+
       // Beräkna bitrate för att få ungefär maxSizeMb storlek
       // 8 * maxSizeMb * 1024 * 1024 = önskad filstorlek i bitar
       // Dividera med duration för att få bitar per sekund
@@ -78,7 +82,34 @@ const compressVideo = (inputPath, outputPath, maxSizeMb, maxDuration = 30) => {
         (8 * maxSizeMb * 1024 * 1024) / duration
       );
 
-      console.log(`Längd: ${duration}s, Målbitrate: ${targetBitrate}bps`);
+      // Dynamiskt anpassa CRF baserat på videolängd
+      // Baslinjen är CRF 28 för 10 sekunder lång video
+      // För varje 10 sekunder ökar CRF med 2
+      const baseCrf = 28;
+      const durationFactor = Math.floor(duration / 10);
+      let crf = Math.min(Math.max(baseCrf + durationFactor * 2, baseCrf), 51); // CRF kan inte vara högre än 51
+
+      // Anpassa upplösningen baserat på längden
+      // Baslinjen är 1280px bredd för 10 sekunder
+      // För varje 10 sekunder minskar vi upplösningen
+      const baseWidth = 1280;
+      const scaleFactors = [
+        { threshold: 10, width: 1280 },
+        { threshold: 30, width: 854 },
+        { threshold: 60, width: 640 },
+        { threshold: 120, width: 480 },
+        { threshold: 240, width: 360 },
+        { threshold: Infinity, width: 240 },
+      ];
+
+      // Hitta lämplig upplösning baserat på duration
+      const scaleWidth =
+        scaleFactors.find((sf) => duration <= sf.threshold)?.width || 240;
+      const scale = `min(${scaleWidth},iw):-2`;
+
+      console.log(
+        `Längd: ${duration}s, Målbitrate: ${targetBitrate}bps, CRF: ${crf}, Scale: ${scale}`
+      );
 
       ffmpeg(inputPath)
         .setStartTime(0) // Starta från början
@@ -86,14 +117,19 @@ const compressVideo = (inputPath, outputPath, maxSizeMb, maxDuration = 30) => {
         .output(outputPath)
         .videoCodec("libx264") // Använd x264 för att komprimera
         .audioCodec("aac") // Komprimera ljudet med AAC
-        .audioBitrate("96k") // Standardisera ljudbitrate
+        .audioBitrate("64k") // Standardisera ljudbitrate
         .videoBitrate(targetBitrate) // Använd beräknad bitrate
         .outputOptions([
-          "-preset fast", // Balans mellan komprimeringstid och -kvalitet
-          "-crf 30", // Högre värde = bättre kompression, sämre kvalitet
+          "-preset veryslow", // Balans mellan komprimeringstid och -kvalitet
+          `-crf ${crf}`, // Högre värde = bättre kompression, sämre kvalitet
           "-movflags +faststart", // Optimera för webbuppspelning
           "-pix_fmt yuv420p", // Standardisera pixelformat för bättre kompatibilitet
-          "-vf scale='min(1280,iw):-2'", // Begränsa upplösning till 1280px bredd
+          `-vf scale='${scale}'`, // Begränsa upplösning till 1280px bredd
+          //test
+          "-tune film", // Optimera för filminnehåll för bättre resultat
+          "-maxrate:v " + targetBitrate, // Sätt maximal bitrate
+          "-bufsize:v " + targetBitrate * 2, // Buffer för VBR (Variable Bit Rate)
+          "-profile:v baseline", // Använd baseline profil för bättre kompatibilitet
         ])
         .on("progress", (progress) => {
           console.log(`Behandlar: ${progress.percent}% färdig`);
@@ -131,7 +167,7 @@ router.post("/video", videoUpload.single("videoFile"), async (req, res) => {
     "public",
     "uploads",
     "videos",
-    "compressed-" + req.file.filename
+    "1mb-compressed-" + req.file.filename
   );
 
   try {

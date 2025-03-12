@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import "./App.css";
-import logoImage from "./assets/img/8mb-converter-page.png";
+import logoImage from "./assets/img/1mb-converter-logo.png";
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -126,7 +126,7 @@ function App() {
         />
       </div>
       <div className="container">
-        <h2>8MB Video Converter</h2>
+        <h2>1MB Video Converter</h2>
         {/* Drag & Drop Area */}
         <div {...getRootProps()} className="dropzone">
           <input {...getInputProps()} />
