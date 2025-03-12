@@ -177,7 +177,7 @@ router.post("/video", videoUpload.single("videoFile"), async (req, res) => {
     res.json({
       message: "Video konverterad och uppladdad",
       filename: "compressed-" + req.file.filename,
-      path: `/public/uploads/videos/compressed-${req.file.filename}`,
+      path: `/public/uploads/videos/1mb-compressed-${req.file.filename}`,
     });
   } catch (error) {
     res
